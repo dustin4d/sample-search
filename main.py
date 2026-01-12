@@ -4,12 +4,19 @@ Song Search CLI - A simple command-line tool for searching songs
 """
 
 import os
-import sys
 import asyncio
 from dotenv import load_dotenv
 from xai_sdk import Client
 from xai_sdk.chat import user, system
 from xai_sdk.tools import web_search
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.prompt import Prompt
+from rich.text import Text
+from rich import box
+
+console = Console()
 
 # Load environment variables
 load_dotenv()
@@ -19,16 +26,20 @@ client = Client(
     api_key=os.getenv("GROK_API_KEY"),
     timeout=3600,  # Override default timeout with longer timeout for reasoning models
 )
+
+# xAI client settings
 chat = client.chat.create(
-    model="grok-4-1-fast",  # reasoning model
-    tools=[web_search()],
+    model="grok-4-1-fast", 
+    tools=[web_search()], # enable web search
     include=["verbose_streaming"],
 )
 
+# System proompt for Grok
 chat.append(system(
     "Check WhoSampled.com for the song provided." \
     "If no information found on WhoSampled, broaden the search to the rest of the web." \
-    "Return the list of samples' original works in bullet points."\
+    "First, output the producer(s) of the track in the format: 'Producer(s): '" \
+    "Then, return the list of samples' original works in bullet points."\
     "Provide a youtube link associated to each of the original's songs."
     ))
 
@@ -38,12 +49,13 @@ async def braille_spinner(stop_event: asyncio.Event):
     braille_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
     idx = 0
     while not stop_event.is_set():
-        sys.stdout.write(f'\r{braille_chars[idx]} Searching for samples...')
-        sys.stdout.flush()
+        spinner_text = Text()
+        spinner_text.append(" Searching for samples ", style="italic bright_blue")
+        spinner_text.append(braille_chars[idx], style="bold cyan")
+        console.print(spinner_text, end='\r')
         idx = (idx + 1) % len(braille_chars)
         await asyncio.sleep(0.1)
-    sys.stdout.write('\r' + ' ' * 50 + '\r')  # Clear the line
-    sys.stdout.flush()
+    console.print(' ' * 50, end='\r')  # Clear the line
 
 
 async def search_song(song_name: str, artist_name: str) -> None:
@@ -56,7 +68,7 @@ async def search_song(song_name: str, artist_name: str) -> None:
         elif not song_name:
             query = f"Artist: {artist_name}"
 
-        print()  # Add newline before spinner
+        console.print()  # Add newline before spinner
 
         # Create stop event for spinner
         stop_event = asyncio.Event()
@@ -73,26 +85,72 @@ async def search_song(song_name: str, artist_name: str) -> None:
         stop_event.set()
         await spinner_task
 
-        # Display the response
-        print("✅ Sources:\n")
-        print(response.content)
-        print()
+        # Display the response in a beautiful panel
+        console.print()
+        results_panel = Panel(
+            Markdown(response.content),
+            title="[bold green]✨ Sample Sources Found[/bold green]",
+            border_style="green",
+            box=box.ROUNDED,
+            padding=(1, 2)
+        )
+        console.print(results_panel)
+        console.print()
 
     except Exception as e:
-        print(f"\n❌ Error: {str(e)}\n")
+        console.print()
+        error_panel = Panel(
+            f"[bold red]{str(e)}[/bold red]",
+            title="[bold red]❌ Error[/bold red]",
+            border_style="red",
+            box=box.ROUNDED
+        )
+        console.print(error_panel)
+        console.print()
 
 
 async def main():
     """Run the Song Search CLI application."""
-    print("Sample Search")
-    print("_" * 50)
-    print("Input song and artist name\n")
+    # Clear screen effect
+    console.clear()
 
-    song_name = input("Song name: ").strip()
-    artist_name = input("Artist name: ").strip()
+    # Create professional ASCII art header
+    header_art = Text()
+    header_art.append("♪  ", style="bold magenta")
+    header_art.append("SAMPLE SEARCH", style="bold bright_cyan")
+    header_art.append("  ♪", style="bold magenta")
+
+    # Create welcome panel
+    welcome_panel = Panel(
+        header_art,
+        subtitle="[dim italic]🔍 Discover the DNA of your favorite tracks[/dim italic]",
+        border_style="bright_magenta",
+        box=box.DOUBLE,
+        padding=(1, 2)
+    )
+    console.print(welcome_panel)
+    console.print()
+
+    # Create input instructions
+    instructions = Text()
+    instructions.append("🎤 ", style="bold yellow")
+    instructions.append("Enter song and artist details below", style="italic bright_white")
+    console.print(instructions)
+    console.print()
+
+    # Get user input with Rich Prompt
+    song_name = Prompt.ask("[bold cyan]Song name[/bold cyan]", default="").strip()
+    artist_name = Prompt.ask("[bold magenta]Artist name[/bold magenta]", default="").strip()
 
     if not song_name and not artist_name:
-        print("\n❌ Please enter at least a song name or artist name\n")
+        console.print()
+        warning = Panel(
+            "[bold yellow]⚠️  Please enter at least a song name or artist name[/bold yellow]",
+            border_style="yellow",
+            box=box.ROUNDED
+        )
+        console.print(warning)
+        console.print()
         return
 
     await search_song(song_name, artist_name)
