@@ -28,7 +28,8 @@ chat = client.chat.create(
 chat.append(system(
     "Check WhoSampled.com for the song provided." \
     "If no information found on WhoSampled, broaden the search to the rest of the web." \
-    "Return the list of samples' original works in bullet points."
+    "Return the list of samples' original works in bullet points."\
+    "Provide a youtube link associated to each of the original's songs."
     ))
 
 
@@ -85,7 +86,7 @@ async def main():
     """Run the Song Search CLI application."""
     print("Sample Search")
     print("_" * 50)
-    print("\ Input song and artist name\n")
+    print("Input song and artist name\n")
 
     song_name = input("Song name: ").strip()
     artist_name = input("Artist name: ").strip()
